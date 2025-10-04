@@ -1,0 +1,10 @@
+﻿version: 1
+name: my-mcp-server
+description: My first MCP server with greeting and calculator tools
+entrypoint: src/main.py
+runtime: python
+pythonVersion: "3.11"
+build:
+  command: "pip install -r requirements.txt"
+start:
+  command: "python src/main.py"
