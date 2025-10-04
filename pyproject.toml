@@ -1,0 +1,15 @@
+﻿[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "my-mcp-server"
+version = "1.0.0"
+description = "My first MCP server with greeting and calculator tools"
+dependencies = [
+    "mcp",
+    "pydantic",
+    "asyncio"
+]
+
+[project.scripts]
+my-mcp-server = "src.main:main"

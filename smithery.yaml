@@ -5,6 +5,6 @@ entrypoint: src/main.py
 runtime: python
 pythonVersion: "3.11"
 build:
-  command: "pip install -r requirements.txt"
+  command: "pip install ."
 start:
   command: "python src/main.py"
