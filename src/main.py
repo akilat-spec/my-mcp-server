@@ -1,187 +1,183 @@
 ﻿#!/usr/bin/env python3
 """
-MCP Server - Debug Version
+MCP Server - HTTP Version for Smithey Scanning
 """
 import json
 import sys
-import time
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
-print("🚀 MCP Server Starting...", file=sys.stderr)
-print("Python version:", sys.version, file=sys.stderr)
-print("Working directory check", file=sys.stderr)
-
-class MCPServer:
-    def __init__(self):
-        self.initialized = False
-        print("✅ MCP Server class initialized", file=sys.stderr)
-        
-    def handle_initialize(self, request_id, params):
-        print("📨 Handling initialize request", file=sys.stderr)
-        self.initialized = True
-        
-        response = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {}
-                },
-                "serverInfo": {
-                    "name": "my-mcp-server",
-                    "version": "1.0.0"
-                }
-            }
-        }
-        print(f"✅ Sending initialize response: {response}", file=sys.stderr)
-        return response
+class MCPHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
     
-    def handle_tools_list(self, request_id):
-        print("📨 Handling tools/list request", file=sys.stderr)
-        tools = [
-            {
-                "name": "greet",
-                "description": "A friendly greeting tool",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string", "description": "Your name"}
-                    },
-                    "required": ["name"]
-                }
-            },
-            {
-                "name": "calculator",
-                "description": "Simple calculator",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "operation": {"type": "string", "description": "add, subtract, multiply, divide"},
-                        "a": {"type": "number", "description": "First number"},
-                        "b": {"type": "number", "description": "Second number"}
-                    },
-                    "required": ["operation", "a", "b"]
-                }
-            }
-        ]
-        
-        response = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {"tools": tools}
-        }
-        print(f"✅ Sending tools list: {len(tools)} tools", file=sys.stderr)
-        return response
-    
-    def handle_request(self, request):
+    def do_POST(self):
+        """Handle MCP requests"""
         try:
-            method = request.get("method")
-            request_id = request.get("id")
-            params = request.get("params", {})
+            # Read request body
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            request = json.loads(post_data.decode('utf-8'))
             
-            print(f"🔍 Received request - Method: {method}, ID: {request_id}", file=sys.stderr)
+            print(f"📨 Received request: {request}", file=sys.stderr)
             
-            if method == "initialize":
-                return self.handle_initialize(request_id, params)
-            elif method == "tools/list":
-                return self.handle_tools_list(request_id)
-            elif method == "tools/call":
-                name = params.get("name")
-                arguments = params.get("arguments", {})
-                print(f"🔧 Tool call: {name} with args: {arguments}", file=sys.stderr)
-                
-                if name == "greet":
-                    result = f"Hello, {arguments.get('name', 'Friend')}!"
-                elif name == "calculator":
-                    op = arguments.get("operation", "add")
-                    a = arguments.get("a", 0)
-                    b = arguments.get("b", 0)
-                    if op == "add": result = f"{a} + {b} = {a+b}"
-                    elif op == "subtract": result = f"{a} - {b} = {a-b}"
-                    elif op == "multiply": result = f"{a} × {b} = {a*b}"
-                    elif op == "divide": result = f"{a} ÷ {b} = {a/b}" if b != 0 else "Error: division by zero"
-                    else: result = f"Unknown operation: {op}"
-                else:
-                    result = f"Unknown tool: {name}"
-                
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "result": {
-                        "content": [{"type": "text", "text": result}]
-                    }
-                }
-            else:
-                print(f"❌ Unknown method: {method}", file=sys.stderr)
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {
-                        "code": -32601,
-                        "message": f"Method not found: {method}"
-                    }
-                }
-                
+            # Handle the request
+            response = self.handle_mcp_request(request)
+            
+            # Send response
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response_json = json.dumps(response).encode('utf-8')
+            self.wfile.write(response_json)
+            print(f"📤 Sent response: {response}", file=sys.stderr)
+            
         except Exception as e:
-            print(f"💥 Error in handle_request: {e}", file=sys.stderr)
+            print(f"💥 Error: {e}", file=sys.stderr)
+            self.send_error(500, str(e))
+    
+    def handle_mcp_request(self, request):
+        """Handle MCP protocol requests"""
+        method = request.get("method")
+        request_id = request.get("id")
+        
+        if method == "initialize":
             return {
                 "jsonrpc": "2.0",
-                "id": request.get("id"),
+                "id": request_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {},
+                        "prompts": {}
+                    },
+                    "serverInfo": {
+                        "name": "my-mcp-server",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+        
+        elif method == "tools/list":
+            tools = [
+                {
+                    "name": "greet",
+                    "description": "A friendly greeting tool",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Your name"
+                            }
+                        },
+                        "required": ["name"]
+                    }
+                },
+                {
+                    "name": "calculator",
+                    "description": "Simple calculator with basic operations",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {
+                                "type": "string",
+                                "description": "add, subtract, multiply, divide",
+                                "enum": ["add", "subtract", "multiply", "divide"]
+                            },
+                            "a": {
+                                "type": "number",
+                                "description": "First number"
+                            },
+                            "b": {
+                                "type": "number", 
+                                "description": "Second number"
+                            }
+                        },
+                        "required": ["operation", "a", "b"]
+                    }
+                }
+            ]
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "tools": tools
+                }
+            }
+        
+        elif method == "tools/call":
+            params = request.get("params", {})
+            name = params.get("name")
+            arguments = params.get("arguments", {})
+            
+            if name == "greet":
+                result = f"Hello, {arguments.get('name', 'Friend')}! Welcome to MCP Server!"
+            elif name == "calculator":
+                op = arguments.get("operation", "add")
+                a = arguments.get("a", 0)
+                b = arguments.get("b", 0)
+                
+                if op == "add": result = f"{a} + {b} = {a + b}"
+                elif op == "subtract": result = f"{a} - {b} = {a - b}"
+                elif op == "multiply": result = f"{a} × {b} = {a * b}"
+                elif op == "divide": 
+                    if b == 0: result = "Error: Cannot divide by zero"
+                    else: result = f"{a} ÷ {b} = {a / b}"
+                else: result = f"Unknown operation: {op}"
+            else:
+                result = f"Unknown tool: {name}"
+            
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": result
+                        }
+                    ]
+                }
+            }
+        
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
                 "error": {
-                    "code": -32603,
-                    "message": f"Internal error: {str(e)}"
+                    "code": -32601,
+                    "message": f"Method not found: {method}"
                 }
             }
     
-    def run(self):
-        print("🔄 Starting main server loop...", file=sys.stderr)
-        line_count = 0
-        
-        while True:
-            try:
-                # Read line from stdin
-                line = sys.stdin.readline()
-                line_count += 1
-                
-                if not line:
-                    print(f"📭 No more input (line {line_count})", file=sys.stderr)
-                    time.sleep(0.1)
-                    continue
-                
-                line = line.strip()
-                if not line:
-                    print(f"📭 Empty line (line {line_count})", file=sys.stderr)
-                    continue
-                
-                print(f"📥 Received line {line_count}: {line[:100]}...", file=sys.stderr)
-                
-                # Parse JSON
-                request = json.loads(line)
-                print(f"📨 Parsed JSON request", file=sys.stderr)
-                
-                # Handle request
-                response = self.handle_request(request)
-                
-                # Send response
-                if response:
-                    response_json = json.dumps(response)
-                    print(f"📤 Sending response: {response_json}", file=sys.stderr)
-                    print(response_json, flush=True)
-                    sys.stdout.flush()
-                    print("✅ Response sent and flushed", file=sys.stderr)
-                else:
-                    print("ℹ️ No response to send", file=sys.stderr)
-                    
-            except json.JSONDecodeError as e:
-                print(f"❌ JSON decode error: {e}", file=sys.stderr)
-            except Exception as e:
-                print(f"💥 Unexpected error: {e}", file=sys.stderr)
-                time.sleep(0.1)
+    def log_message(self, format, *args):
+        """Override to log to stderr instead of stdout"""
+        print(f"🌐 HTTP {format % args}", file=sys.stderr)
 
-def main():
-    print("🎯 Starting MCP Server main function", file=sys.stderr)
-    server = MCPServer()
-    server.run()
+def run_server():
+    """Run the HTTP server"""
+    port = 8000
+    server_address = ('', port)
+    httpd = HTTPServer(server_address, MCPHandler)
+    
+    print(f"🚀 MCP HTTP Server running on port {port}", file=sys.stderr)
+    print("✅ Server ready for Smithey scanning", file=sys.stderr)
+    
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("🛑 Server stopped", file=sys.stderr)
+    except Exception as e:
+        print(f"💥 Server error: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
-    main()
+    run_server()
