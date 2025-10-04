@@ -1,0 +1,9 @@
+﻿# Test profile configuration for Smithey scanning
+# No authentication needed for this simple MCP server
+version: 1
+testProfile:
+  authentication:
+    type: none
+  server:
+    type: mcp
+    transport: stdio
