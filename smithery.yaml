@@ -1,4 +1,6 @@
 ﻿version: 1
 name: my-mcp-server
+description: A simple MCP server with greeting and calculator tools
 entrypoint: src/main.py
 runtime: python
+pythonVersion: "3.11"
